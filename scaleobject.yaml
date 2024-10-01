@@ -1,0 +1,14 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: pythonapplication
+spec:
+  scaleTargetRef:
+    name: pythonapplication # Target deployment for scaling
+  triggers:
+  - type: aws-sqs-queue # Example of event source: AWS SQS
+    metadata:
+      queueURL: https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>
+      awsRegion: "<region>"
+      queueLength: "10" # Number of messages in the queue to scale on
+      targetValue: "5"

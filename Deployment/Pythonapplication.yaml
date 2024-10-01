@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: 
+  name: pythonapplication
+  labels:
+    app: web
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: pythonapplication
+  template:
+    metadata:
+      labels:
+        app: pythonapplication
+    
+   spec:
+      affinity:
+         nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - pythonapp
+   
+      containers:
+        - name: pythonapplication
+          image: karthik7007/pythonapp:samplepython
+          ports:
+            - containerPort: 5000  
+          resources: 
+            requests:
+              cpu: "150m"
+              memory: "120Mi"
+            limits:
+              cpu: "250m"
+              memory: "250Mi"
+      terminationGracePeriodSeconds: 3600
+      imagePullSecrets:
+        - name: dockerhub-secret
+      tolerations:
+      - key: virtual-kubelet.io/provider
+        operator: Exists
+         
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pythonapplication
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 80
+      targetport: 5000
+  selector:
+    app: pythonapplication
+
+
