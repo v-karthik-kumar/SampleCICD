@@ -75,7 +75,8 @@ main() {
     -p '{"imagePullSecrets": [{"name": "dockerhub-secret"}]}'
 
   # Deploy application
-  kubectl apply -f Pythonapplication.yaml -n $namespace
+  
+  kubectl apply -f ./Application/Pythonapplication.yaml -n $namespace
   echo "Checking deployment status..."
   sleep 10  # Wait for some time for the deployment to proceed
   DEPLOY_STATUS=$(kubectl rollout status deployment/pythonapplication --timeout=60s || echo "FAILED")
@@ -83,7 +84,7 @@ main() {
 
   if [[ "$DEPLOY_STATUS" == "FAILED" ]]; then
       echo "Deployment failed, rolling back...";
-      kubectl rollout undo deployment/pythonapplication;
+      kubectl rollout undo deployment/pythonapplication -n $Namespace ;
   else
       echo "Deployment succeeded!";
       get_deployment_details
