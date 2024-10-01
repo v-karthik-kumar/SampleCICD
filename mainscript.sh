@@ -3,7 +3,7 @@
 #Login to the kubernetes clsuter
 
 
-aws eks update-kubeconfig --name Certificate --region ap-south-1
+aws eks update-kubeconfig --name <Cluster > --region ap-south-1
 
 helm_version="v3.16.1"
 

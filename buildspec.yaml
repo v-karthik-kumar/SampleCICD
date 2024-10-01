@@ -1,0 +1,75 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - nohup /usr/local/bin/dockerd --host=unix:///var/run/docker.sock --host=tcp://127.0.0.1:2375 --storage-driver=overlay2 &
+      - timeout 15 sh -c "until docker info; do echo .; sleep 1; done"
+      - echo "Docker daemon started."
+
+  build:
+    commands:
+      - echo "Build started on `date`"
+      - echo "Building Docker image..."
+      - docker --version
+
+      # Set Docker Hub credentials for login
+      - echo "Logging into Docker Hub..."
+      - echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      # Build the Docker image
+      - TAG="$(date +%Y_%m_%d_%H_%M_%S).$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+      - newimagename=samplepython
+      - REPOSITORY_URI="your-dockerhub-repo-name/pythonapp"
+      - cd ./Application
+      - imagetag=$newimagename-$TAG
+      - docker build -t $newimagename:$TAG .
+      - docker tag $newimagename-$TAG  $REPOSITORY_URI:$newimagename-$TAG
+      # Push Docker image to Docker Hub
+      - echo "Pushing the Docker image to Docker Hub..."
+      - docker push $REPOSITORY_URI:$newimagename-$TAG  
+
+  post_build:
+    commands:
+      # Update Kubernetes with the new Docker image
+      - echo "Updating deployment manifest with the new image..."
+      - sed -i 's@CONTAINER_IMAGE@'"$newimagename:$TAG"'@' ./Deployments/application.yaml
+      - cat ./Deployments/application.yaml
+      - CREDENTIALS=$(aws sts assume-role --role-arn arn:aws:iam::*********:role/service-role/codebuild-service-role --role-session-name <mail id> --duration-seconds 900)
+      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+      - export AWS_EXPIRATION=$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')
+      - aws eks update-kubeconfig --name InterventionsCluster_RL --region ap-south-1
+      - echo "Apply changes to kube manifests"  
+      - kubectl get ns
+      # Deploy the updated application
+      - echo "Deploying to Kubernetes..."
+      - kubectl apply -f ./Deployments/application.yaml
+
+      # Monitor the deployment status
+      - echo "Checking deployment status..."
+      - sleep 10  # Wait for some time for the deployment to proceed
+      - DEPLOY_STATUS=$(kubectl rollout status deployment/pythonapplication --timeout=60s || echo "FAILED")
+      - echo "deployment status"
+      - echo  $DEPLOY_STATUS
+      - |
+        
+        if [[ "$DEPLOY_STATUS" == "FAILED" ]]; then
+            echo "Deployment failed, rolling back...";
+            kubectl rollout undo deployment/pythonapplication;
+        else
+            echo "Deployment succeeded!";
+            echo "Deployment Details:"
+            kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE |grep $DEPLOYMENT_NAME
+            echo "Service Details:"
+            kubectl get service $SERVICE_NAME -n $NAMESPACE |grep  $SERVICE_NAME
+            echo "Scaling Configuration:"
+            kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE -o=jsonpath='{.spec.replicas}'
+            echo " ============ "
+            echo "Fetching CPU and memory usage..."
+            kubectl top pod -l app=$DEPLOYMENT_ID -n $NAMESPACE
+        fi
+
+
+      - echo "Build finished on `date`"
+
