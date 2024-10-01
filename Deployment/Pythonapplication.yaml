@@ -24,7 +24,8 @@ spec:
                 operator: In
                 values:
                 - pythonapp
-   
+      securityContext:  
+        runAsUser: 1000   
       containers:
         - name: pythonapplication
           image: karthik7007/pythonapp:samplepython
